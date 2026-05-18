@@ -78,3 +78,13 @@ The script downloads the GEO gene count files if they are not already present, r
 ## Notes
 
 Raw downloaded GEO count files in `data_raw/gene_counts/` are excluded from GitHub using `.gitignore` because they can be recreated by the analysis script.
+
+## Figures
+
+### NR3C2 expression by age group
+
+![NR3C2 young vs old boxplot](figures/NR3C2_young_vs_old_boxplot.png)
+
+### NR3C2 expression across age
+
+![NR3C2 expression vs age](figures/NR3C2_expression_vs_age.png)
