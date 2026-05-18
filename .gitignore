@@ -1,0 +1,11 @@
+# R / RStudio
+.Rhistory
+.RData
+.Ruserdata/
+
+# Raw downloaded GEO files
+data_raw/gene_counts/
+# Temporary files
+*.tmp
+*.log
+.Rproj.user/

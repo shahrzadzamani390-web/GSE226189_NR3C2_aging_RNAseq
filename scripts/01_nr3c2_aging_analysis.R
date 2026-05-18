@@ -1,0 +1,183 @@
+# NR3C2 aging analysis in GSE226189 primary skin fibroblast RNA-seq
+# Data source: GEO GSE226189
+# Counts: featureCounts gene-level counts, hg19 Ensembl v82
+
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+
+if (!requireNamespace("GEOquery", quietly = TRUE)) BiocManager::install("GEOquery")
+if (!requireNamespace("DESeq2", quietly = TRUE)) BiocManager::install("DESeq2")
+if (!requireNamespace("ggplot2", quietly = TRUE)) install.packages("ggplot2")
+
+library(GEOquery)
+library(DESeq2)
+library(ggplot2)
+
+dir.create("data_raw/gene_counts", recursive = TRUE, showWarnings = FALSE)
+dir.create("data_processed", showWarnings = FALSE)
+dir.create("metadata", showWarnings = FALSE)
+dir.create("results", showWarnings = FALSE)
+dir.create("figures", showWarnings = FALSE)
+
+nr3c2_ensembl <- "ENSG00000151623"
+
+gse <- getGEO("GSE226189", GSEMatrix = TRUE)
+pheno <- pData(gse[[1]])
+
+sample_metadata <- data.frame(
+  sample_id = pheno$geo_accession,
+  title = pheno$title,
+  age = as.numeric(pheno$`age (years):ch1`),
+  sex = pheno$`Sex:ch1`,
+  cell_type = pheno$`cell type:ch1`
+)
+
+sample_metadata$age_group <- ifelse(
+  sample_metadata$age < 40, "Young",
+  ifelse(sample_metadata$age > 60, "Old", "Middle")
+)
+
+gene_count_urls <- pheno$supplementary_file_2
+gene_count_files <- file.path("data_raw/gene_counts", basename(gene_count_urls))
+
+for (i in seq_along(gene_count_urls)) {
+  if (!file.exists(gene_count_files[i])) {
+    message("Downloading ", i, " of ", length(gene_count_urls), ": ", basename(gene_count_files[i]))
+    download.file(gene_count_urls[i], destfile = gene_count_files[i], mode = "wb")
+  }
+}
+
+read_count_file <- function(file) {
+  x <- read.delim(gzfile(file), header = TRUE, check.names = FALSE)
+  sample_col <- colnames(x)[2]
+  colnames(x) <- c("Tracking_ID", sample_col)
+  x
+}
+
+count_list <- lapply(gene_count_files, read_count_file)
+
+same_genes <- all(sapply(count_list, function(x) identical(x$Tracking_ID, count_list[[1]]$Tracking_ID)))
+stopifnot(same_genes)
+
+sample_names_from_files <- sapply(count_list, function(x) colnames(x)[2])
+sample_names_from_files <- sub("_COUNT$", "", sample_names_from_files)
+
+count_matrix <- data.frame(
+  Tracking_ID = count_list[[1]]$Tracking_ID,
+  do.call(cbind, lapply(count_list, function(x) x[[2]])),
+  check.names = FALSE
+)
+
+colnames(count_matrix)[-1] <- sample_names_from_files
+
+stopifnot(all(sample_metadata$title == colnames(count_matrix)[-1]))
+
+write.csv(sample_metadata, "metadata/sample_metadata.csv", row.names = FALSE)
+write.csv(count_matrix, "data_processed/gene_count_matrix.csv", row.names = FALSE)
+
+# Young vs Old analysis, adjusted for sex
+analysis_metadata <- sample_metadata[sample_metadata$age_group %in% c("Young", "Old"), ]
+analysis_metadata$age_group <- factor(analysis_metadata$age_group, levels = c("Young", "Old"))
+analysis_metadata$sex <- factor(analysis_metadata$sex)
+
+counts_for_deseq <- count_matrix[, analysis_metadata$title]
+rownames(counts_for_deseq) <- count_matrix$Tracking_ID
+counts_for_deseq <- as.matrix(counts_for_deseq)
+storage.mode(counts_for_deseq) <- "integer"
+
+stopifnot(all(colnames(counts_for_deseq) == analysis_metadata$title))
+
+dds <- DESeqDataSetFromMatrix(
+  countData = counts_for_deseq,
+  colData = analysis_metadata,
+  design = ~ sex + age_group
+)
+
+dds <- dds[rowSums(counts(dds)) >= 10, ]
+dds <- DESeq(dds)
+
+res_old_vs_young <- results(dds, name = "age_group_Old_vs_Young")
+nr3c2_result <- res_old_vs_young[nr3c2_ensembl, ]
+
+nr3c2_normalized <- counts(dds, normalized = TRUE)[nr3c2_ensembl, ]
+
+nr3c2_table <- data.frame(
+  sample_id = analysis_metadata$sample_id,
+  title = analysis_metadata$title,
+  age = analysis_metadata$age,
+  sex = analysis_metadata$sex,
+  age_group = analysis_metadata$age_group,
+  nr3c2_normalized_count = as.numeric(nr3c2_normalized)
+)
+
+write.csv(as.data.frame(nr3c2_result), "results/NR3C2_DESeq2_old_vs_young_adjusted_for_sex.csv")
+write.csv(nr3c2_table, "results/NR3C2_normalized_counts_young_old.csv", row.names = FALSE)
+
+p1 <- ggplot(nr3c2_table, aes(x = age_group, y = nr3c2_normalized_count, color = sex)) +
+  geom_boxplot(outlier.shape = NA, color = "black") +
+  geom_jitter(width = 0.15, size = 2.5, alpha = 0.85) +
+  labs(
+    title = "NR3C2 expression in young vs old fibroblast samples",
+    subtitle = "DESeq2 normalized counts; model adjusted for sex",
+    x = "Age group",
+    y = "NR3C2 normalized count",
+    color = "Sex"
+  ) +
+  theme_classic(base_size = 13)
+
+ggsave("figures/NR3C2_young_vs_old_boxplot.png", p1, width = 6, height = 4, dpi = 300)
+
+# Continuous age analysis, adjusted for sex
+all_metadata <- sample_metadata
+all_metadata$sex <- factor(all_metadata$sex)
+all_metadata$age_centered <- all_metadata$age - mean(all_metadata$age)
+
+all_counts_for_deseq <- count_matrix[, all_metadata$title]
+rownames(all_counts_for_deseq) <- count_matrix$Tracking_ID
+all_counts_for_deseq <- as.matrix(all_counts_for_deseq)
+storage.mode(all_counts_for_deseq) <- "integer"
+
+stopifnot(all(colnames(all_counts_for_deseq) == all_metadata$title))
+
+dds_age_centered <- DESeqDataSetFromMatrix(
+  countData = all_counts_for_deseq,
+  colData = all_metadata,
+  design = ~ sex + age_centered
+)
+
+dds_age_centered <- dds_age_centered[rowSums(counts(dds_age_centered)) >= 10, ]
+dds_age_centered <- DESeq(dds_age_centered)
+
+res_age_centered <- results(dds_age_centered, name = "age_centered")
+nr3c2_age_centered_result <- res_age_centered[nr3c2_ensembl, ]
+
+nr3c2_all_normalized <- counts(dds_age_centered, normalized = TRUE)[nr3c2_ensembl, ]
+
+nr3c2_all_table <- data.frame(
+  sample_id = all_metadata$sample_id,
+  title = all_metadata$title,
+  age = all_metadata$age,
+  age_centered = all_metadata$age_centered,
+  sex = all_metadata$sex,
+  age_group = all_metadata$age_group,
+  nr3c2_normalized_count = as.numeric(nr3c2_all_normalized)
+)
+
+write.csv(as.data.frame(nr3c2_age_centered_result), "results/NR3C2_DESeq2_continuous_age_adjusted_for_sex.csv")
+write.csv(nr3c2_all_table, "results/NR3C2_normalized_counts_all_samples.csv", row.names = FALSE)
+
+p2 <- ggplot(nr3c2_all_table, aes(x = age, y = nr3c2_normalized_count, color = sex)) +
+  geom_point(size = 2.5, alpha = 0.85) +
+  geom_smooth(method = "lm", se = TRUE, color = "black", linewidth = 0.8) +
+  labs(
+    title = "NR3C2 expression increases with age",
+    subtitle = "DESeq2 normalized counts; model adjusted for sex",
+    x = "Age (years)",
+    y = "NR3C2 normalized count",
+    color = "Sex"
+  ) +
+  theme_classic(base_size = 13)
+
+ggsave("figures/NR3C2_expression_vs_age.png", p2, width = 6, height = 4, dpi = 300)
+
+print(nr3c2_result)
+print(nr3c2_age_centered_result)
