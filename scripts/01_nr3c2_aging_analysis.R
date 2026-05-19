@@ -258,3 +258,95 @@ pheatmap(
   width = 7,
   height = 6
 )
+
+# Genome-wide differential expression: Old vs Young adjusted for sex
+res_all_old_vs_young <- results(dds, name = "age_group_Old_vs_Young")
+
+res_all_table <- as.data.frame(res_all_old_vs_young)
+res_all_table$ensembl_id <- rownames(res_all_table)
+
+res_all_table <- res_all_table[, c(
+  "ensembl_id",
+  "baseMean",
+  "log2FoldChange",
+  "lfcSE",
+  "stat",
+  "pvalue",
+  "padj"
+)]
+
+res_all_table <- res_all_table[order(res_all_table$pvalue), ]
+
+if (!requireNamespace("org.Hs.eg.db", quietly = TRUE)) BiocManager::install("org.Hs.eg.db")
+library(org.Hs.eg.db)
+library(AnnotationDbi)
+
+res_all_table$gene_symbol <- mapIds(
+  org.Hs.eg.db,
+  keys = res_all_table$ensembl_id,
+  column = "SYMBOL",
+  keytype = "ENSEMBL",
+  multiVals = "first"
+)
+
+res_all_table$gene_name <- mapIds(
+  org.Hs.eg.db,
+  keys = res_all_table$ensembl_id,
+  column = "GENENAME",
+  keytype = "ENSEMBL",
+  multiVals = "first"
+)
+
+res_all_table <- res_all_table[, c(
+  "ensembl_id",
+  "gene_symbol",
+  "gene_name",
+  "baseMean",
+  "log2FoldChange",
+  "lfcSE",
+  "stat",
+  "pvalue",
+  "padj"
+)]
+
+write.csv(res_all_table, "results/DESeq2_all_genes_old_vs_young_adjusted_for_sex_annotated.csv", row.names = FALSE)
+
+significant_genes <- res_all_table[
+  !is.na(res_all_table$padj) & res_all_table$padj < 0.05,
+]
+
+significant_genes <- significant_genes[order(significant_genes$padj), ]
+
+write.csv(significant_genes, "results/DESeq2_significant_genes_FDR05_old_vs_young_adjusted_for_sex.csv", row.names = FALSE)
+
+volcano_table <- res_all_table
+volcano_table$significance <- "Not significant"
+
+volcano_table$significance[
+  !is.na(volcano_table$padj) & volcano_table$padj < 0.05 & volcano_table$log2FoldChange > 0
+] <- "Higher in Old"
+
+volcano_table$significance[
+  !is.na(volcano_table$padj) & volcano_table$padj < 0.05 & volcano_table$log2FoldChange < 0
+] <- "Lower in Old"
+
+p_volcano <- ggplot(volcano_table, aes(x = log2FoldChange, y = -log10(pvalue), color = significance)) +
+  geom_point(alpha = 0.6, size = 1.4) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray40") +
+  scale_color_manual(
+    values = c(
+      "Higher in Old" = "#D95F02",
+      "Lower in Old" = "#1B9E77",
+      "Not significant" = "gray70"
+    )
+  ) +
+  labs(
+    title = "Differential expression: Old vs Young fibroblasts",
+    subtitle = "DESeq2 model adjusted for sex",
+    x = "log2 fold-change (Old vs Young)",
+    y = "-log10 nominal p-value",
+    color = "FDR < 0.05"
+  ) +
+  theme_classic(base_size = 13)
+
+ggsave("figures/volcano_old_vs_young_adjusted_for_sex.png", p_volcano, width = 6.5, height = 5, dpi = 300)

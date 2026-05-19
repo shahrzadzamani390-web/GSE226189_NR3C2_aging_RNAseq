@@ -106,3 +106,18 @@ PCA and sample-level QC were performed using all 82 samples.
 ![Sample distance heatmap](figures/sample_distance_heatmap.png)
 
 A short QC interpretation is available in `docs/QC_summary.md`.
+
+## Genome-wide differential expression
+
+A genome-wide DESeq2 analysis was performed for Old vs Young samples while adjusting for sex.
+
+- Genes/features tested: 49,704
+- Significant genes at FDR < 0.05: 2
+- Higher in Old: FGF9
+- Lower in Old: NEFH
+
+### Volcano plot
+
+![Volcano plot Old vs Young](figures/volcano_old_vs_young_adjusted_for_sex.png)
+
+The full annotated differential expression table is available in `results/DESeq2_all_genes_old_vs_young_adjusted_for_sex_annotated.csv`.

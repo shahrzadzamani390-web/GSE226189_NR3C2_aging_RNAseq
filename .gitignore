@@ -9,3 +9,4 @@ data_raw/gene_counts/
 *.tmp
 *.log
 .Rproj.user/
+.positai
