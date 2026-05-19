@@ -88,3 +88,21 @@ Raw downloaded GEO count files in `data_raw/gene_counts/` are excluded from GitH
 ### NR3C2 expression across age
 
 ![NR3C2 expression vs age](figures/NR3C2_expression_vs_age.png)
+
+## Quality control
+
+PCA and sample-level QC were performed using all 82 samples.
+
+### PCA by age group and sex
+
+![PCA by age group and sex](figures/PCA_age_group_sex.png)
+
+### Library size QC
+
+![Library size QC](figures/library_size_qc.png)
+
+### Sample distance heatmap
+
+![Sample distance heatmap](figures/sample_distance_heatmap.png)
+
+A short QC interpretation is available in `docs/QC_summary.md`.

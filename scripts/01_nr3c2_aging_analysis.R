@@ -181,3 +181,80 @@ ggsave("figures/NR3C2_expression_vs_age.png", p2, width = 6, height = 4, dpi = 3
 
 print(nr3c2_result)
 print(nr3c2_age_centered_result)
+# Quality control: PCA, library size, and sample distances
+vsd <- vst(dds_age_centered, blind = FALSE)
+
+pca_data <- plotPCA(vsd, intgroup = c("age_group", "sex"), returnData = TRUE)
+percent_var <- round(100 * attr(pca_data, "percentVar"))
+
+write.csv(pca_data, "results/PCA_sample_coordinates.csv", row.names = FALSE)
+
+p_pca <- ggplot(pca_data, aes(x = PC1, y = PC2, color = age_group, shape = sex)) +
+  geom_point(size = 3, alpha = 0.9) +
+  labs(
+    title = "PCA of GSE226189 fibroblast RNA-seq samples",
+    subtitle = "Variance-stabilized gene counts",
+    x = paste0("PC1: ", percent_var[1], "% variance"),
+    y = paste0("PC2: ", percent_var[2], "% variance"),
+    color = "Age group",
+    shape = "Sex"
+  ) +
+  theme_classic(base_size = 13)
+
+ggsave("figures/PCA_age_group_sex.png", p_pca, width = 6, height = 4.5, dpi = 300)
+
+library_size <- colSums(count_matrix[, sample_metadata$title])
+
+library_qc <- data.frame(
+  sample_id = sample_metadata$sample_id,
+  title = sample_metadata$title,
+  age = sample_metadata$age,
+  sex = sample_metadata$sex,
+  age_group = sample_metadata$age_group,
+  library_size = as.numeric(library_size)
+)
+
+write.csv(library_qc, "results/library_size_qc.csv", row.names = FALSE)
+
+p_library <- ggplot(library_qc, aes(x = age_group, y = library_size / 1e6, color = sex)) +
+  geom_boxplot(outlier.shape = NA, color = "black") +
+  geom_jitter(width = 0.15, size = 2.5, alpha = 0.85) +
+  labs(
+    title = "RNA-seq library size by age group",
+    subtitle = "Total gene counts per sample",
+    x = "Age group",
+    y = "Library size (million counts)",
+    color = "Sex"
+  ) +
+  theme_classic(base_size = 13)
+
+ggsave("figures/library_size_qc.png", p_library, width = 6, height = 4, dpi = 300)
+
+if (!requireNamespace("pheatmap", quietly = TRUE)) install.packages("pheatmap")
+library(pheatmap)
+
+sample_dist <- dist(t(assay(vsd)))
+sample_dist_matrix <- as.matrix(sample_dist)
+
+rownames(sample_dist_matrix) <- colnames(vsd)
+colnames(sample_dist_matrix) <- colnames(vsd)
+
+annotation_col <- data.frame(
+  age = sample_metadata$age,
+  sex = sample_metadata$sex,
+  age_group = sample_metadata$age_group
+)
+
+rownames(annotation_col) <- sample_metadata$title
+
+pheatmap(
+  sample_dist_matrix,
+  annotation_col = annotation_col,
+  annotation_row = annotation_col,
+  show_rownames = FALSE,
+  show_colnames = FALSE,
+  fontsize = 8,
+  filename = "figures/sample_distance_heatmap.png",
+  width = 7,
+  height = 6
+)
