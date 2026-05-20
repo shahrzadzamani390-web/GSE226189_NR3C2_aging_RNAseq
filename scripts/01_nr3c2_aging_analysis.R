@@ -350,3 +350,80 @@ p_volcano <- ggplot(volcano_table, aes(x = log2FoldChange, y = -log10(pvalue), c
   theme_classic(base_size = 13)
 
 ggsave("figures/volcano_old_vs_young_adjusted_for_sex.png", p_volcano, width = 6.5, height = 5, dpi = 300)
+
+# Targeted MR-related gene panel analysis
+mr_gene_panel <- c(
+  "NR3C2",
+  "HSD11B1",
+  "HSD11B2",
+  "FKBP4",
+  "FKBP5",
+  "HSP90AA1",
+  "HSP90AB1",
+  "NCOA1",
+  "NCOA2",
+  "NCOR1",
+  "NCOR2",
+  "NR3C1",
+  "SGK1",
+  "SCNN1A",
+  "SCNN1B",
+  "SCNN1G"
+)
+
+mr_panel_results <- res_all_table[
+  !is.na(res_all_table$gene_symbol) & res_all_table$gene_symbol %in% mr_gene_panel,
+]
+
+mr_panel_results <- mr_panel_results[match(mr_gene_panel, mr_panel_results$gene_symbol), ]
+mr_panel_results <- mr_panel_results[!is.na(mr_panel_results$gene_symbol), ]
+mr_panel_results$panel_padj <- p.adjust(mr_panel_results$pvalue, method = "BH")
+
+mr_panel_results <- mr_panel_results[, c(
+  "ensembl_id",
+  "gene_symbol",
+  "gene_name",
+  "baseMean",
+  "log2FoldChange",
+  "pvalue",
+  "padj",
+  "panel_padj"
+)]
+
+write.csv(mr_panel_results, "results/MR_gene_panel_old_vs_young_adjusted_for_sex.csv", row.names = FALSE)
+
+mr_panel_plot_table <- mr_panel_results
+mr_panel_plot_table$direction <- ifelse(
+  mr_panel_plot_table$log2FoldChange > 0,
+  "Higher in Old",
+  "Lower in Old"
+)
+
+mr_panel_plot_table$gene_symbol <- factor(
+  mr_panel_plot_table$gene_symbol,
+  levels = mr_panel_plot_table$gene_symbol[order(mr_panel_plot_table$log2FoldChange)]
+)
+
+p_mr_panel <- ggplot(
+  mr_panel_plot_table,
+  aes(x = log2FoldChange, y = gene_symbol, color = direction, size = -log10(pvalue))
+) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray40") +
+  geom_point(alpha = 0.9) +
+  scale_color_manual(
+    values = c(
+      "Higher in Old" = "#D95F02",
+      "Lower in Old" = "#1B9E77"
+    )
+  ) +
+  labs(
+    title = "MR-related gene panel: Old vs Young fibroblasts",
+    subtitle = "DESeq2 model adjusted for sex",
+    x = "log2 fold-change (Old vs Young)",
+    y = "Gene",
+    color = "Direction",
+    size = "-log10 p-value"
+  ) +
+  theme_classic(base_size = 13)
+
+ggsave("figures/MR_gene_panel_old_vs_young_dotplot.png", p_mr_panel, width = 7, height = 5, dpi = 300)

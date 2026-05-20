@@ -121,3 +121,15 @@ A genome-wide DESeq2 analysis was performed for Old vs Young samples while adjus
 ![Volcano plot Old vs Young](figures/volcano_old_vs_young_adjusted_for_sex.png)
 
 The full annotated differential expression table is available in `results/DESeq2_all_genes_old_vs_young_adjusted_for_sex_annotated.csv`.
+
+## Targeted MR-related gene panel
+
+A targeted mineralocorticoid receptor-related gene panel was examined using the Old vs Young DESeq2 model adjusted for sex.
+
+The panel included NR3C2, corticosteroid metabolism genes, chaperones, nuclear receptor cofactors, glucocorticoid receptor NR3C1, SGK1, and epithelial sodium channel subunits.
+
+NR3C2 showed the strongest nominal signal in this targeted panel, but no MR panel gene passed panel-adjusted FDR < 0.05.
+
+![MR gene panel Old vs Young](figures/MR_gene_panel_old_vs_young_dotplot.png)
+
+The MR panel result table is available in `results/MR_gene_panel_old_vs_young_adjusted_for_sex.csv`.
